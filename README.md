@@ -13,15 +13,6 @@ repo.
   need to redeploy this unless you're changing its logic — if you do, deploy
   it via Supabase, not GitHub.
 
-## How to host `jkpg-dashboard.html` on GitHub Pages
-1. Create (or reuse) a GitHub repo.
-2. Add `jkpg-dashboard.html` to the repo root (or rename to `index.html` if
-   you want it at the bare domain root instead of `/jkpg-dashboard.html`).
-3. Repo → **Settings → Pages** → Source: `Deploy from a branch` → Branch:
-   `main` (or whichever) → `/ (root)` → Save.
-4. GitHub gives you a URL like `https://<username>.github.io/<repo>/`.
-   Share that with your admin team.
-
 ## Before giving anyone the link — read this
 - **Anyone with the link can view live sales/ops data.** There's no login.
   Treat the link itself as the access control — don't post it anywhere public.

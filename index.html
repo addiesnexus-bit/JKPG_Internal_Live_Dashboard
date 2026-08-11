@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#f5f6f8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest-dashboard.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  html,body{overflow-x:auto;overflow-y:auto;touch-action:pan-x pan-y;}
+  .panel-body{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+</style>
+<title>JKPG Ops — Field Command</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Merriweather:wght@300;400;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B1220; --panel:#141B2D; --panel-2:#101728; --line:#232C42;
+    --amber:#F5A623; --amber-dim:#8a5f1c;
+    --cyan:#22D3EE;
+    --green:#34D399; --red:#F87171; --yellow:#FBBF24;
+    --text:#E6EAF2; --text-dim:#94A3B8; --text-faint:#5B6479;
+    --marker-border:#0B1220;
+    --tile-url:https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png;
+    --header-grad-1:#0D1526; --header-grad-2:#0B1220;
+    --map-bg:#0d1424;
+    --banner-bg:#1a1206;
+    --status-active-bg:rgba(52,211,153,0.12); --status-out-bg:rgba(148,163,184,0.1);
+    --status-none-bg:rgba(248,113,113,0.1); --status-late-bg:rgba(251,191,36,0.12);
+    --radius:14px;
+  }
+  html[data-theme="light"]{
+    --bg:#F2F4F8; --panel:#FFFFFF; --panel-2:#F6F7FA; --line:#E1E5ED;
+    --amber:#C97A0A; --amber-dim:#E8B873;
+    --cyan:#0891B2;
+    --green:#0F9D63; --red:#DC2626; --yellow:#B45309;
+    --text:#1B2233; --text-dim:#5B6479; --text-faint:#8A93A6;
+    --marker-border:#FFFFFF;
+    --tile-url:https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png;
+    --header-grad-1:#FFFFFF; --header-grad-2:#F2F4F8;
+    --map-bg:#e7ebf1;
+    --banner-bg:#FEF3C7;
+    --status-active-bg:rgba(15,157,99,0.1); --status-out-bg:rgba(91,100,121,0.08);
+    --status-none-bg:rgba(220,38,38,0.08); --status-late-bg:rgba(180,83,9,0.1);
+  }
+  body{transition:background-color .2s, color .2s;}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Merriweather',serif;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .display{font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:0.02em;}
+
+  a{color:inherit;}
+
+  /* ---------- Top bar ---------- */
+  header.topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 28px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--header-grad-1),var(--header-grad-2));
+    position:sticky;top:0;z-index:50;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{
+    width:38px;height:38px;border-radius:10px;
+    background:conic-gradient(from 220deg,var(--amber),#7c4a10,var(--amber));
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Rajdhani';font-weight:700;color:#0B1220;font-size:16px;
+  }
+  .brand-title{font-family:'Rajdhani';font-weight:700;font-size:20px;letter-spacing:0.03em;}
+  .brand-sub{font-size:11px;color:var(--text-dim);letter-spacing:0.08em;text-transform:uppercase;margin-top:1px;}
+  .top-right{display:flex;align-items:center;gap:22px;}
+  .clock{font-family:'JetBrains Mono';font-size:13px;color:var(--text-dim);}
+  .live-pill{
+    display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:0.08em;
+    color:var(--cyan);text-transform:uppercase;font-weight:600;
+  }
+  .ping{position:relative;width:8px;height:8px;border-radius:50%;background:var(--cyan);}
+  .ping::after{
+    content:'';position:absolute;inset:-4px;border-radius:50%;
+    border:1.5px solid var(--cyan);animation:pulse 1.8s ease-out infinite;
+  }
+  @keyframes pulse{0%{transform:scale(0.4);opacity:1;}100%{transform:scale(2.2);opacity:0;}}
+  .refresh-btn{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:8px 14px;border-radius:8px;font-size:12px;cursor:pointer;
+    display:flex;align-items:center;gap:6px;transition:border-color .15s;
+  }
+  .refresh-btn:hover{border-color:var(--amber);}
+  .refresh-btn:focus-visible, a:focus-visible, button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;}
+  .notice-banner{
+    background:var(--banner-bg);border-bottom:1px solid var(--amber-dim);
+    padding:8px 28px;font-size:11.5px;color:var(--yellow);text-align:center;
+  }
+
+  main{max-width:1440px;margin:0 auto;padding:24px 28px 60px;}
+
+  /* ---------- KPI strip ---------- */
+  .kpi-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px;}
+  .kpi{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;position:relative;overflow:hidden;
+  }
+  .kpi::before{
+    content:'';position:absolute;top:0;left:0;width:100%;height:2px;
+    background:var(--kpi-accent,var(--amber));
+  }
+  .kpi-label{font-size:10.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;}
+  .kpi-value{font-family:'Rajdhani';font-weight:700;font-size:clamp(18px,4.2vw,32px);line-height:1.1;color:var(--text);overflow-wrap:anywhere;}
+  .kpi-value.loading{color:var(--text-faint);}
+  .kpi{min-width:0;}
+
+  /* ---------- Grid sections ---------- */
+  .row{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:16px;}
+  .row, .panel{min-width:0;}
+  @media (max-width:980px){.row{grid-template-columns:1fr;} .kpi-strip{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:640px){
+    header.topbar{flex-direction:column;align-items:flex-start;gap:10px;padding:12px 16px;}
+    .top-right{width:100%;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+    main{padding:16px 14px 40px;}
+    .kpi-strip{gap:10px;}
+    .kpi{padding:12px 14px;}
+    .panel-head{flex-wrap:wrap;gap:8px;}
+    .panel-title{flex-wrap:wrap;}
+    .modal-stats-row{grid-template-columns:repeat(2,1fr);}
+    .duty-filter-tabs{width:100%;justify-content:flex-start;flex-wrap:wrap;}
+  }
+
+  /* Duty hours filter tabs */
+  .duty-filter-tabs{display:flex;gap:6px;}
+  .duty-tab{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);
+    padding:6px 12px;border-radius:8px;font-size:11.5px;font-weight:600;cursor:pointer;transition:border-color .15s,color .15s;
+  }
+  .duty-tab:hover{border-color:var(--amber);}
+  .duty-tab.active{background:var(--amber);border-color:var(--amber);color:#0B1220;}
+  .install-btn{display:none;}
+  .install-btn.show{display:flex;}
+
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .panel-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px;border-bottom:1px solid var(--line);
+  }
+  .panel-title{font-family:'Rajdhani';font-weight:700;font-size:16px;letter-spacing:0.02em;display:flex;align-items:center;gap:8px;}
+  .panel-title .tag{font-size:10px;color:var(--text-faint);font-weight:500;letter-spacing:0.06em;}
+  .panel-body{padding:16px 18px;}
+
+  #map{height:420px;width:100%;background:var(--map-bg);}
+  .leaflet-popup-content-wrapper{background:var(--panel-2);color:var(--text);border-radius:8px;}
+  .leaflet-popup-tip{background:var(--panel-2);}
+  .map-legend{font-size:11px;color:var(--text-dim);padding:10px 18px;border-top:1px solid var(--line);display:flex;gap:16px;}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;}
+
+  /* Attendance rail */
+  .rep-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 0;border-bottom:1px solid var(--line);
+  }
+  .rep-row:last-child{border-bottom:none;}
+  .rep-name{font-size:13.5px;font-weight:600;}
+  .rep-region{font-size:11px;color:var(--text-faint);}
+  .status-chip{
+    font-size:10.5px;padding:3px 9px;border-radius:99px;font-weight:600;letter-spacing:0.03em;
+    display:flex;align-items:center;gap:5px;
+  }
+  .status-active{background:var(--status-active-bg);color:var(--green);}
+  .status-out{background:var(--status-out-bg);color:var(--text-dim);}
+  .status-none{background:var(--status-none-bg);color:var(--red);}
+  .status-late{background:var(--status-late-bg);color:var(--yellow);}
+
+  /* Tables */
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;
+    color:var(--text-faint);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);
+  }
+  td{padding:10px;border-bottom:1px solid var(--line);color:var(--text);}
+  tr:last-child td{border-bottom:none;}
+  td.num, th.num{text-align:right;font-family:'JetBrains Mono';}
+  .name-cell{font-weight:600;}
+  .sub{color:var(--text-faint);font-size:11px;}
+
+  .badge-connected{color:var(--green);font-weight:600;}
+  .badge-notrecv{color:var(--red);font-weight:600;}
+  .badge-total{color:var(--cyan);font-weight:600;}
+
+  .empty-state{padding:32px 0;text-align:center;color:var(--text-faint);font-size:13px;}
+
+  .scroll-panel{max-height:340px;overflow-y:auto;}
+  .scroll-panel::-webkit-scrollbar{width:6px;}
+  .scroll-panel::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px;}
+
+  .lead-card{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;margin-bottom:8px;
+  }
+  .lead-card:last-child{margin-bottom:0;}
+  .lead-top{display:flex;justify-content:space-between;align-items:center;}
+  .lead-price{font-family:'JetBrains Mono';color:var(--amber);font-weight:600;font-size:13px;}
+
+  footer{
+    text-align:center;padding:20px;color:var(--text-faint);font-size:11px;
+    border-top:1px solid var(--line);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .ping::after{animation:none;}
+  }
+
+  /* Rep cards */
+  .rep-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;}
+  .rep-card{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:border-color .15s,transform .1s;}
+  .rep-card:hover{border-color:var(--amber);transform:translateY(-2px);}
+  .rep-card-name{font-weight:700;font-size:14px;margin-bottom:2px;}
+  .rep-card-region{font-size:11px;color:var(--text-faint);margin-bottom:10px;}
+  .rep-card-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-size:11.5px;color:var(--text-dim);}
+  .rep-card-stats b{color:var(--text);font-family:'JetBrains Mono';font-weight:600;}
+
+  /* Rep detail modal */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;z-index:200;padding:20px;}
+  .modal-box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);max-width:720px;width:100%;max-height:85vh;overflow-y:auto;}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);}
+  .modal-close{cursor:pointer;background:none;border:1px solid var(--line);color:var(--text-dim);font-size:14px;border-radius:8px;padding:4px 10px;}
+  .modal-body{padding:6px 18px 18px;}
+  .modal-section-title{font-family:'Rajdhani';font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-dim);margin:18px 0 8px;}
+  .modal-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px;}
+  .modal-stat{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center;}
+  .modal-stat b{display:block;font-family:'Rajdhani';font-size:20px;}
+  .modal-stat span{font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.04em;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">JK</div>
+    <div>
+      <div class="brand-title">JKPG Field Command</div>
+      <div class="brand-sub">Operations Overview</div>
+    </div>
+  </div>
+  <div class="top-right">
+    <div class="live-pill"><span class="ping"></span> Live</div>
+    <div class="clock mono" id="clock">—</div>
+    <div class="clock mono" id="lastSync">Last sync: —</div>
+    <button class="refresh-btn install-btn" id="installBtn" title="Add to home screen">⬇ Install</button>
+    <button class="refresh-btn" id="themeToggleBtn" title="Toggle light/dark theme">☀ Light</button>
+    <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
+  </div>
+</header>
+<div class="notice-banner">
+  Internal use only — do not forward this file. Requires internet access to load live data.
+</div>
+
+<main>
+
+  <!-- KPI STRIP -->
+  <section class="kpi-strip">
+    <div class="kpi" style="--kpi-accent:var(--green)">
+      <div class="kpi-label">Reps On Duty</div>
+      <div class="kpi-value loading" id="kpiOnDuty">—</div>
+    </div>
+    <div class="kpi" style="--kpi-accent:var(--cyan)">
+      <div class="kpi-label">Calls Today</div>
+      <div class="kpi-value loading" id="kpiCalls">—</div>
+    </div>
+    <div class="kpi" style="--kpi-accent:var(--amber)">
+      <div class="kpi-label">Sales Today</div>
+      <div class="kpi-value loading" id="kpiSales">—</div>
+    </div>
+    <div class="kpi" style="--kpi-accent:var(--red)">
+      <div class="kpi-label">Outstanding</div>
+      <div class="kpi-value loading" id="kpiOutstanding">—</div>
+    </div>
+    <div class="kpi" style="--kpi-accent:var(--yellow)">
+      <div class="kpi-label">Open Hot Leads</div>
+      <div class="kpi-value loading" id="kpiLeads">—</div>
+    </div>
+  </section>
+
+  <!-- MAP + ATTENDANCE -->
+  <section class="row">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title"><span class="ping" style="width:6px;height:6px;"></span> Live Location Map <span class="tag">Latest ping per rep</span></div>
+      </div>
+      <div id="map"></div>
+      <div class="map-legend">
+        <span><span class="dot" style="background:var(--green)"></span>On duty</span>
+        <span><span class="dot" style="background:var(--text-faint)"></span>Off duty / stale ping</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Attendance <span class="tag" id="attDate">—</span> <span class="tag" id="attCount">—/—</span></div>
+      </div>
+      <div class="panel-body scroll-panel" id="attendanceList">
+        <div class="empty-state">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOTAL DUTY HOURS -->
+  <section class="row">
+    <div class="panel" style="grid-column: 1 / -1;">
+      <div class="panel-head">
+        <div class="panel-title">⏱ Total Duty Hours <span class="tag" id="dutyRangeLabel">Today</span></div>
+        <div class="duty-filter-tabs" id="dutyFilterTabs">
+          <button class="duty-tab active" data-range="day" onclick="setDutyRange('day')">Day</button>
+          <button class="duty-tab" data-range="week" onclick="setDutyRange('week')">Week</button>
+          <button class="duty-tab" data-range="month" onclick="setDutyRange('month')">Month</button>
+          <button class="duty-tab" data-range="year" onclick="setDutyRange('year')">Year</button>
+        </div>
+      </div>
+      <div class="panel-body scroll-panel" id="dutyHoursList">
+        <div class="empty-state">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOCATION TAMPER ALERTS -->
+  <section class="row">
+    <div class="panel" style="grid-column: 1 / -1;">
+      <div class="panel-head">
+        <div class="panel-title">🚨 Location Tamper Alerts <span class="tag" id="tamperCount">—</span></div>
+      </div>
+      <div class="panel-body scroll-panel" id="tamperList">
+        <div class="empty-state">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CALLING REPORT -->
+  <section class="panel" style="margin-bottom:16px;">
+    <div class="panel-head">
+      <div class="panel-title">Daily Calling Report <span class="tag">Deduplicated by dealer</span></div>
+    </div>
+    <div class="panel-body">
+      <table>
+        <thead>
+          <tr><th>Rep</th><th class="num">Total</th><th class="num">Connected</th><th class="num">Not Received</th></tr>
+        </thead>
+        <tbody id="callingReportBody">
+          <tr><td colspan="4" class="empty-state">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- PRODUCTIVITY -->
+  <section class="panel" style="margin-bottom:16px;">
+    <div class="panel-head">
+      <div class="panel-title">Sales Team Productivity <span class="tag">Today's activity + points</span></div>
+    </div>
+    <div class="panel-body">
+      <table>
+        <thead>
+          <tr><th>Rep</th><th class="num">Calls</th><th class="num">Visits</th><th class="num">Leads</th><th class="num">New Dealers</th><th class="num">Points</th></tr>
+        </thead>
+        <tbody id="productivityBody">
+          <tr><td colspan="6" class="empty-state">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- REP OVERVIEW CARDS -->
+  <section class="panel" style="margin-bottom:16px;">
+    <div class="panel-head">
+      <div class="panel-title">Sales Team Overview <span class="tag">Tap a rep for full detail</span></div>
+    </div>
+    <div class="panel-body rep-cards-grid" id="repCardsGrid">
+      <div class="empty-state">Loading…</div>
+    </div>
+  </section>
+
+  <div class="row">
+    <!-- SALES -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Daily Sales <span class="tag" id="salesDate">—</span></div>
+        <button id="salesToggle" class="tag" style="cursor:pointer;border:1px solid var(--border)" onclick="toggleSalesView()">Group by Rep</button>
+      </div>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>Dealer</th><th>Rep</th><th class="num">Amount</th></tr></thead>
+          <tbody id="salesBody"><tr><td colspan="3" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- OUTSTANDING -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Outstanding Balances</div>
+      </div>
+      <div class="panel-body scroll-panel">
+        <table>
+          <thead><tr><th>Party</th><th>Rep</th><th class="num">Amount</th></tr></thead>
+          <tbody id="outstandingBody"><tr><td colspan="3" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOT LEADS -->
+  <section class="panel">
+    <div class="panel-head">
+      <div class="panel-title">🔥 Hot Leads <span class="tag">Open only</span></div>
+    </div>
+    <div class="panel-body scroll-panel" id="leadsList">
+      <div class="empty-state">Loading…</div>
+    </div>
+  </section>
+
+</main>
+
+<div class="modal-overlay" id="repModalOverlay" style="display:none" onclick="if(event.target===this)closeRepModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="panel-title" id="repModalName">—</div>
+      <button class="modal-close" onclick="closeRepModal()">✕ Close</button>
+    </div>
+    <div class="modal-body" id="repModalBody"></div>
+  </div>
+</div>
+
+<footer>JK Powerguard — Internal Operations Dashboard · Local file, hand-distributed only</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ============================================================
+// CONFIG — Supabase (anon key, RLS disabled by design for internal distribution)
+// Direct calls — no server/PHP needed, works by just opening this file.
+// ============================================================
+// No Supabase credentials here by design — this file is hosted publicly
+// on GitHub Pages. All reads go through a read-only Edge Function proxy
+// that holds the real credentials server-side and only allows GET on a
+// fixed table allowlist. See supabase/functions/dashboard-proxy.
+const DASHBOARD_PROXY_URL = "https://pbwhnzaluhsltcmvptwg.supabase.co/functions/v1/dashboard-proxy";
+
+// Supabase/PostgREST caps any unbounded query at 1000 rows by default.
+// call_logs and performance_points regularly exceed 1000 rows/day, and
+// without an explicit order= clause Postgres does not guarantee which
+// 1000 rows come back on repeated identical queries — this caused counts
+// to "fluctuate" on every refresh. Fix: paginate through ALL rows using
+// offset/limit, in stable order. If the caller already specified their
+// own explicit limit= (e.g. "most recent 500 geo pings"), that intent is
+// respected as-is and NOT auto-paginated — appending a second limit/offset
+// param on top of an existing one previously broke that query.
+const SB_PAGE_SIZE = 1000;
+async function sb(path){
+  if(/[?&]limit=/.test(path)){
+    // Caller already set an explicit cap — single fetch, no pagination.
+    const res = await fetch(`${DASHBOARD_PROXY_URL}?path=${encodeURIComponent(path)}`);
+    if(!res.ok) throw new Error(`${path} -> ${res.status}`);
+    return res.json();
+  }
+  let all = [];
+  let offset = 0;
+  while(true){
+    const sep = path.includes('?') ? '&' : '?';
+    const pagedPath = `${path}${sep}offset=${offset}&limit=${SB_PAGE_SIZE}`;
+    const res = await fetch(`${DASHBOARD_PROXY_URL}?path=${encodeURIComponent(pagedPath)}`);
+    if(!res.ok) throw new Error(`${path} -> ${res.status}`);
+    const page = await res.json();
+    all = all.concat(page);
+    if(page.length < SB_PAGE_SIZE) break;
+    offset += SB_PAGE_SIZE;
+  }
+  return all;
+}
+
+// Roster barely changes (a new hire maybe once a month) — cache it in the
+// browser for 24h instead of re-pulling it on every load. Falls back to a
+// real fetch on cache miss/expiry/parse failure, same as normal.
+const USERS_CACHE_KEY = 'jkpg-users-cache';
+const USERS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+async function getUsersCached(){
+  try{
+    const cached = JSON.parse(localStorage.getItem(USERS_CACHE_KEY));
+    if(cached && Date.now() - cached.ts < USERS_CACHE_TTL_MS) return cached.data;
+  }catch(e){}
+  const data = await sb(`users?select=*&role=eq.sales&active=eq.true&order=id.asc`);
+  try{ localStorage.setItem(USERS_CACHE_KEY, JSON.stringify({ data, ts: Date.now() })); }catch(e){}
+  return data;
+}
+
+// ---------- date helpers ----------
+function pad(n){return n<10?'0'+n:''+n;}
+function istNow(){
+  // IST = UTC+5:30
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset()*60000;
+  return new Date(utc + 5.5*3600000);
+}
+function todayISO(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function todayDDMMYYYY(d){ return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; }
+function fmtINR(n){
+  return new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(Math.round(n||0));
+}
+
+// ---------- call bucket algorithm (mirrors Android computeCallBuckets) ----------
+function computeCallBuckets(logs){
+  const groups = {};
+  logs.forEach(l=>{
+    const key = l.dealer_id ? `dealer_${l.dealer_id}` : `raw_${(l.dealer_name||'').replace(/\D/g,'').slice(-10)}`;
+    (groups[key] = groups[key]||[]).push(l);
+  });
+  let outgoingConnected=0, outgoingNotReceived=0, incomingReceived=0, incomingMissed=0;
+  Object.values(groups).forEach(events=>{
+    const sorted = events.slice().sort((a,b)=> (a.called_at||'').localeCompare(b.called_at||''));
+    const anyOutgoingConnected = sorted.some(e=>e.outcome==='Connected');
+    const spCalledFirst = sorted.length>0 && (sorted[0].outcome==='Connected'||sorted[0].outcome==='Not Received');
+    const anyIncomingAnswered = sorted.some(e=>e.outcome==='Incoming');
+    const spEverCalled = sorted.some(e=>e.outcome==='Connected'||e.outcome==='Not Received');
+    if(anyOutgoingConnected) outgoingConnected++;
+    else if(spCalledFirst && anyIncomingAnswered) outgoingConnected++;
+    else if(spEverCalled && !anyIncomingAnswered) outgoingNotReceived++;
+    else if(!spEverCalled && anyIncomingAnswered) incomingReceived++;
+    else incomingMissed++;
+  });
+  const totalCalls = outgoingConnected+incomingReceived+outgoingNotReceived;
+  return {outgoingConnected, outgoingNotReceived, incomingReceived, incomingMissed, totalCalls};
+}
+
+// ============================================================
+// MAP
+// ============================================================
+let map, markerLayer, tileLayer;
+function currentTileUrl(){
+  return getComputedStyle(document.documentElement).getPropertyValue('--tile-url').trim();
+}
+function initMap(){
+  map = L.map('map',{zoomControl:true,attributionControl:false}).setView([21.15,79.09], 6); // central India default
+  tileLayer = L.tileLayer(currentTileUrl(), { subdomains:'abcd', maxZoom:19 }).addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+}
+
+function repMarkerIcon(active){
+  const cs = getComputedStyle(document.documentElement);
+  const activeColor = cs.getPropertyValue('--green').trim();
+  const inactiveColor = cs.getPropertyValue('--text-faint').trim();
+  const border = cs.getPropertyValue('--marker-border').trim();
+  const ring = active ? cs.getPropertyValue('--status-active-bg').trim() : cs.getPropertyValue('--status-out-bg').trim();
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:14px;height:14px;border-radius:50%;background:${active?activeColor:inactiveColor};border:2px solid ${border};box-shadow:0 0 0 3px ${ring}"></div>`,
+    iconSize:[14,14]
+  });
+}
+
+// ============================================================
+// LOAD
+// ============================================================
+let outstandingCache = [];
+let syncTickCount = 0;
+async function loadAll(isManual = true){
+  if (!isManual) syncTickCount++;
+  document.getElementById('lastSync').textContent = 'Syncing…';
+  try{
+    const now = istNow();
+    const isoToday = todayISO(now);
+    const ddmmyyyyToday = todayDDMMYYYY(now);
+    document.getElementById('attDate').textContent = ddmmyyyyToday;
+    document.getElementById('salesDate').textContent = ddmmyyyyToday;
+
+    // Egress guard: the full attendance table only needs to be pulled ONCE
+    // per session — past days never change. Every 60s auto-refresh after
+    // that only re-pulls TODAY's rows (a handful) and merges them into the
+    // cached history. Re-fetching the whole growing table every 60s was
+    // exactly the pattern that blew past the egress cap on the last project.
+    const needFullHistory = dutyAttendanceCache.length === 0;
+    const [users, geo, attendanceToday, callLogs, points, sales, outstanding, hotLeads, tamperAlerts, attendanceFull] = await Promise.all([
+      getUsersCached(),
+      sb(`geo_tracking?select=*&order=recorded_at.desc&limit=500`),
+      sb(`attendance?select=*&date=eq.${ddmmyyyyToday}&order=id.asc`),
+      sb(`call_logs?select=*&call_date=eq.${isoToday}&order=created_at.asc`),
+      sb(`performance_points?select=*&date=eq.${isoToday}&order=created_at.asc`),
+      sb(`sales_entries?select=*&entry_date=eq.${isoToday}&is_voided=eq.false&order=id.asc`),
+      (isManual || syncTickCount % 10 === 0) ? sb(`outstanding_logs?select=*&order=amount.desc`) : Promise.resolve(outstandingCache),
+      sb(`hot_leads?select=*&status=eq.Open&order=id.asc`),
+      sb(`admin_alerts?select=*&alert_type=eq.location_tamper&order=breach_detected_at.desc&limit=100`),
+      needFullHistory ? sb(`attendance?select=*&order=id.asc`) : Promise.resolve(null)
+    ]);
+
+    const attendance = attendanceToday;
+    repDataStore = { users, callLogs, sales, points, outstanding };
+    dutyAttendanceCache = needFullHistory
+      ? attendanceFull
+      : dutyAttendanceCache.filter(a => a.date !== ddmmyyyyToday).concat(attendanceToday);
+    dutyUsersCache = users;
+
+    renderKPIs(users, callLogs, sales, outstanding, hotLeads);
+    renderMap(users, geo, attendance);
+    renderAttendance(users, attendance);
+    renderDutyHours(users, dutyAttendanceCache, dutyRange);
+    renderTamperAlerts(tamperAlerts);
+    renderCallingReport(users, callLogs);
+    renderProductivity(users, callLogs, points);
+    renderRepCards(users, callLogs, sales, points);
+    renderSales(sales);
+    outstandingCache = outstanding;
+    renderOutstanding(outstanding);
+    renderLeads(hotLeads);
+
+    document.getElementById('lastSync').textContent = 'Last sync: ' + now.toTimeString().slice(0,8) + ' IST';
+  }catch(err){
+    document.getElementById('lastSync').textContent = 'Sync failed — retrying next cycle';
+    console.error(err);
+  }
+}
+
+function renderKPIs(users, callLogs, sales, outstanding, hotLeads){
+  const buckets = computeCallBuckets(callLogs);
+  document.getElementById('kpiCalls').textContent = buckets.totalCalls;
+  document.getElementById('kpiCalls').classList.remove('loading');
+
+  // Sales Today must always equal the sum of what's listed in the Daily
+  // Sales table below — both are derived from this exact same `sales`
+  // array (see renderSales), filtered server-side by entry_date=today and
+  // is_voided=false. Defensive Number() parsing guards against any stray
+  // null/blank amount silently zeroing instead of poisoning the sum.
+  const validSales = sales.filter(s=>!s.is_voided);
+  const salesTotal = validSales.reduce((a,s)=>{
+    const n = Number(s.amount);
+    return a + (Number.isFinite(n) ? n : 0);
+  },0);
+  document.getElementById('kpiSales').textContent = '₹'+fmtINR(salesTotal);
+  document.getElementById('kpiSales').title = `${validSales.length} sale${validSales.length===1?'':'s'} today`;
+  document.getElementById('kpiSales').classList.remove('loading');
+
+  const outstandingTotal = outstanding.reduce((a,o)=>a+parseFloat(o.amount||0),0);
+  document.getElementById('kpiOutstanding').textContent = '₹'+fmtINR(outstandingTotal);
+  document.getElementById('kpiOutstanding').classList.remove('loading');
+
+  document.getElementById('kpiLeads').textContent = hotLeads.length;
+  document.getElementById('kpiLeads').classList.remove('loading');
+}
+
+function renderMap(users, geo, attendance){
+  renderMap.__lastArgs = [users, geo, attendance];
+  markerLayer.clearLayers();
+  const activeIds = new Set(attendance.filter(a=>!a.punch_out_time).map(a=>a.user_id));
+  const latestByUser = {};
+  attendance.forEach(a=>{
+    const lat = a.punch_out_lat ?? a.punch_in_lat;
+    const lng = a.punch_out_lng ?? a.punch_in_lng;
+    if(lat!=null && lng!=null){
+      latestByUser[a.user_id] = { user_id:a.user_id, lat, lng, recorded_at:a.punch_out_time||a.punch_in_time };
+    }
+  });
+  document.getElementById('kpiOnDuty').textContent = `${activeIds.size}/${users.length}`;
+  document.getElementById('kpiOnDuty').classList.remove('loading');
+
+  const pts=[];
+  // Reps whose last-known ping is at (near) the same coordinates would
+  // otherwise render as one marker stacked on another. Nudge duplicates
+  // apart in a small deterministic ring so every rep stays visible/clickable.
+  const coordCounts = {};
+  Object.values(latestByUser).forEach(g=>{
+    const user = users.find(u=>u.id===g.user_id);
+    const name = user?user.name:'Unknown rep';
+    const active = activeIds.has(g.user_id);
+
+    const coordKey = `${g.lat.toFixed(3)},${g.lng.toFixed(3)}`;
+    const dupIndex = coordCounts[coordKey] || 0;
+    coordCounts[coordKey] = dupIndex + 1;
+    const jitter = 0.0006; // ~60m, enough to separate pins visually at street zoom
+    const angle = dupIndex * (Math.PI * 2 / 6);
+    const lat = dupIndex===0 ? g.lat : g.lat + jitter*Math.sin(angle);
+    const lng = dupIndex===0 ? g.lng : g.lng + jitter*Math.cos(angle);
+
+    const marker = L.marker([lat,lng],{icon:repMarkerIcon(active)}).addTo(markerLayer);
+    marker.bindPopup(`<b>${name}</b><br><span class="mono" style="font-size:11px">${g.recorded_at||''}</span>${dupIndex>0?'<br><span class="mono" style="font-size:10px;color:var(--dim)">exact coords: '+g.lat.toFixed(5)+', '+g.lng.toFixed(5)+'</span>':''}`);
+    pts.push([lat,lng]);
+  });
+  if(pts.length) map.fitBounds(pts,{padding:[30,30],maxZoom:11});
+}
+
+function renderAttendance(users, attendance){
+  const el = document.getElementById('attendanceList');
+  const presentCount = users.filter(u=>attendance.some(a=>a.user_id===u.id)).length;
+  document.getElementById('attCount').textContent = `${presentCount}/${users.length}`;
+  if(users.length===0){ el.innerHTML='<div class="empty-state">No active reps found.</div>'; return; }
+  el.innerHTML = users.map(u=>{
+    const rec = attendance.find(a=>a.user_id===u.id);
+    let chip;
+    if(!rec) chip = `<span class="status-chip status-none">Not punched in</span>`;
+    else if(rec.punch_out_time) chip = `<span class="status-chip status-out">Duty complete</span>`;
+    else if(rec.is_late) chip = `<span class="status-chip status-late">Late · ${rec.punch_in_time||''}</span>`;
+    else chip = `<span class="status-chip status-active">Active · ${rec.punch_in_time||''}</span>`;
+    return `<div class="rep-row">
+      <div><div class="rep-name">${u.name||u.id}</div><div class="rep-region">${u.region||'—'}</div></div>
+      ${chip}
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// TOTAL DUTY HOURS (day / week / month / year, filtered client-side
+// from the one already-fetched attendance table — no extra network calls)
+// ============================================================
+let dutyRange = 'day';
+let dutyAttendanceCache = [];
+let dutyUsersCache = [];
+
+function parseAttendanceDT(ddmmyyyy, hms){
+  if(!ddmmyyyy || !hms) return null;
+  const [d,m,y] = ddmmyyyy.split('/').map(Number);
+  const [h=0,mi=0,s=0] = hms.split(':').map(Number);
+  if(!d||!m||!y) return null;
+  return new Date(y, m-1, d, h, mi, s);
+}
+function dutyRangeCutoff(range, now){
+  const c = new Date(now);
+  c.setHours(0,0,0,0);
+  if(range==='week') c.setDate(c.getDate()-6);
+  else if(range==='month') c.setDate(1);
+  else if(range==='year') c.setMonth(0,1);
+  return c;
+}
+function fmtDutyHours(h){
+  const hh = Math.floor(h);
+  const mm = Math.round((h-hh)*60);
+  return `${hh}h ${String(mm).padStart(2,'0')}m`;
+}
+function computeDutyTotals(attendance, range){
+  const now = istNow();
+  const cutoff = dutyRangeCutoff(range, now);
+  const todayStr = todayDDMMYYYY(now);
+  const totals = {};
+  attendance.forEach(a=>{
+    const [d,m,y] = (a.date||'').split('/').map(Number);
+    if(!d||!m||!y) return;
+    if(new Date(y,m-1,d) < cutoff) return;
+    const inDt = parseAttendanceDT(a.date, a.punch_in_time);
+    if(!inDt) return;
+    const outDt = a.punch_out_time ? parseAttendanceDT(a.date, a.punch_out_time)
+      : (a.date===todayStr ? now : null); // only count an ongoing shift if it's today
+    if(!outDt || outDt <= inDt) return;
+    totals[a.user_id] = (totals[a.user_id]||0) + (outDt - inDt)/3600000;
+  });
+  return totals;
+}
+function renderDutyHours(users, attendance, range){
+  const totals = computeDutyTotals(attendance, range);
+  const label = {day:'Today', week:'Last 7 Days', month:'This Month', year:'This Year'}[range];
+  document.getElementById('dutyRangeLabel').textContent = label;
+  const el = document.getElementById('dutyHoursList');
+  if(users.length===0){ el.innerHTML = '<div class="empty-state">No sales reps found.</div>'; return; }
+  const rows = users.map(u=>({u, hrs: totals[u.id]||0})).sort((a,b)=>b.hrs-a.hrs);
+  el.innerHTML = rows.map(({u,hrs})=>`<div class="rep-row">
+    <div><div class="rep-name">${u.name||u.id}</div><div class="rep-region">${u.region||'—'}</div></div>
+    <span class="status-chip status-active">${fmtDutyHours(hrs)}</span>
+  </div>`).join('');
+}
+function setDutyRange(range){
+  dutyRange = range;
+  document.querySelectorAll('#dutyFilterTabs .duty-tab').forEach(b=>b.classList.toggle('active', b.dataset.range===range));
+  renderDutyHours(dutyUsersCache, dutyAttendanceCache, range);
+}
+
+function renderTamperAlerts(alerts){
+  const el = document.getElementById('tamperList');
+  document.getElementById('tamperCount').textContent = `${alerts.length} in log`;
+  if(alerts.length===0){ el.innerHTML='<div class="empty-state">No tamper events recorded.</div>'; return; }
+  el.innerHTML = alerts.map(a=>{
+    const when = a.breach_detected_at ? new Date(a.breach_detected_at).toLocaleString('en-IN', {timeZone:'Asia/Kolkata'}) : '—';
+    const resolved = a.resolved ? `<span class="status-chip status-out">Resolved</span>` : `<span class="status-chip status-late">Open</span>`;
+    return `<div class="rep-row">
+      <div><div class="rep-name">${a.entity_id||'Unknown'}</div><div class="rep-region">${a.details||''} · ${when}</div></div>
+      ${resolved}
+    </div>`;
+  }).join('');
+}
+
+function renderCallingReport(users, callLogs){
+  const tbody = document.getElementById('callingReportBody');
+  if(users.length===0){ tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No sales reps found.</td></tr>`; return; }
+  tbody.innerHTML = users.map(u=>{
+    const repCalls = callLogs.filter(c=>c.user_id===u.id);
+    const b = computeCallBuckets(repCalls);
+    return `<tr>
+      <td class="name-cell">${u.name||u.id}<div class="sub">${u.region||''}</div></td>
+      <td class="num badge-total">${b.totalCalls}</td>
+      <td class="num badge-connected">${b.outgoingConnected}</td>
+      <td class="num badge-notrecv">${b.outgoingNotReceived}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderProductivity(users, callLogs, points){
+  const tbody = document.getElementById('productivityBody');
+  if(users.length===0){ tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No sales reps found.</td></tr>`; return; }
+  tbody.innerHTML = users.map(u=>{
+    const repCalls = callLogs.filter(c=>c.user_id===u.id);
+    const b = computeCallBuckets(repCalls);
+    const repPoints = points.filter(p=>p.user_id===u.id);
+    const visits = repPoints.filter(p=>p.category==='field_visit').length;
+    const leads = repPoints.filter(p=>p.category==='hot_lead_created'||p.category==='hot_lead_closed').length;
+    const newDealers = repPoints.filter(p=>p.category==='new_dealer_added').length;
+    const pointsTotal = repPoints.reduce((a,p)=>a+(p.points||0),0);
+    return `<tr>
+      <td class="name-cell">${u.name||u.id}</td>
+      <td class="num">${b.totalCalls}</td>
+      <td class="num">${visits}</td>
+      <td class="num">${leads}</td>
+      <td class="num">${newDealers}</td>
+      <td class="num" style="color:var(--amber);font-weight:600;">${pointsTotal}</td>
+    </tr>`;
+  }).join('');
+}
+
+let salesGrouped = false;
+let lastSales = [];
+function toggleSalesView(){
+  salesGrouped = !salesGrouped;
+  document.getElementById('salesToggle').textContent = salesGrouped ? 'Show Flat List' : 'Group by Rep';
+  renderSales(lastSales);
+}
+function renderSales(sales){
+  lastSales = sales;
+  const tbody = document.getElementById('salesBody');
+  if(sales.length===0){ tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No sales logged today yet.</td></tr>`; return; }
+  if(!salesGrouped){
+    tbody.innerHTML = sales.map(s=>`<tr>
+      <td class="name-cell">${s.dealer_name||'—'}</td>
+      <td class="sub">${s.user_name||'—'}</td>
+      <td class="num">₹${fmtINR(s.amount)}</td>
+    </tr>`).join('');
+    return;
+  }
+  const groups = {};
+  sales.forEach(s=>{
+    const rep = s.user_name || 'Unassigned';
+    (groups[rep] = groups[rep] || []).push(s);
+  });
+  tbody.innerHTML = Object.keys(groups).sort().map(rep=>{
+    const rows = groups[rep];
+    const total = rows.reduce((a,s)=>a+(Number(s.amount)||0),0);
+    return `<tr style="background:rgba(255,255,255,0.03)">
+      <td colspan="2" class="name-cell">${rep} <span class="sub">(${rows.length})</span></td>
+      <td class="num">₹${fmtINR(total)}</td>
+    </tr>` + rows.map(s=>`<tr>
+      <td class="name-cell" style="padding-left:20px">${s.dealer_name||'—'}</td>
+      <td class="sub"></td>
+      <td class="num">₹${fmtINR(s.amount)}</td>
+    </tr>`).join('');
+  }).join('');
+}
+
+function renderOutstanding(outstanding){
+  const tbody = document.getElementById('outstandingBody');
+  if(outstanding.length===0){ tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No outstanding records.</td></tr>`; return; }
+  tbody.innerHTML = outstanding.map(o=>`<tr>
+    <td class="name-cell">${o.party_name||'—'}</td>
+    <td class="sub">${o.sales_person||'—'}</td>
+    <td class="num" style="color:var(--red)">₹${fmtINR(o.amount)}</td>
+  </tr>`).join('');
+}
+
+function renderLeads(leads){
+  const el = document.getElementById('leadsList');
+  if(leads.length===0){ el.innerHTML = `<div class="empty-state">No open hot leads.</div>`; return; }
+  el.innerHTML = leads.map(l=>`<div class="lead-card">
+    <div class="lead-top">
+      <div><b>${l.customer_name||'Unnamed lead'}</b> <span class="sub">· ${l.salesperson_name||'—'}</span></div>
+      <div class="lead-price">${l.price_quoted?('₹'+fmtINR(l.price_quoted)):''}</div>
+    </div>
+    <div class="sub" style="margin-top:4px;">${l.inquiry_details||''}</div>
+  </div>`).join('');
+}
+
+// ============================================================
+// REP OVERVIEW CARDS + DETAIL MODAL
+// ============================================================
+let repDataStore = { users:[], callLogs:[], sales:[], points:[], outstanding:[] };
+
+function repShortName(u){ return (u.name||'').trim().split(/\s+/)[0].toUpperCase(); }
+
+function renderRepCards(users, callLogs, sales, points){
+  const grid = document.getElementById('repCardsGrid');
+  if(users.length===0){ grid.innerHTML = `<div class="empty-state">No sales reps found.</div>`; return; }
+  grid.innerHTML = users.map(u=>{
+    const b = computeCallBuckets(callLogs.filter(c=>c.user_id===u.id));
+    const repSales = sales.filter(s=>s.user_id===u.id);
+    const salesTotal = repSales.reduce((a,s)=>a+(Number(s.amount)||0),0);
+    const pts = points.filter(p=>p.user_id===u.id).reduce((a,p)=>a+(p.points||0),0);
+    return `<div class="rep-card" onclick="openRepModal('${u.id}')">
+      <div class="rep-card-name">${u.name||u.id}</div>
+      <div class="rep-card-region">${u.region||'—'}</div>
+      <div class="rep-card-stats">
+        <div>Calls <b>${b.totalCalls}</b></div>
+        <div>Sales <b>₹${fmtINR(salesTotal)}</b></div>
+        <div>Connected <b>${b.outgoingConnected}</b></div>
+        <div>Points <b>${pts}</b></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openRepModal(userId){
+  const {users, callLogs, sales, points, outstanding} = repDataStore;
+  const u = users.find(x=>String(x.id)===String(userId));
+  if(!u) return;
+  const repCalls = callLogs.filter(c=>c.user_id===u.id);
+  const b = computeCallBuckets(repCalls);
+  const repSales = sales.filter(s=>s.user_id===u.id);
+  const salesTotal = repSales.reduce((a,s)=>a+(Number(s.amount)||0),0);
+  const repPoints = points.filter(p=>p.user_id===u.id);
+  const pointsTotal = repPoints.reduce((a,p)=>a+(p.points||0),0);
+  const repOutstanding = (outstanding||[]).filter(o=>(o.sales_person||'').trim().toUpperCase()===repShortName(u));
+
+  document.getElementById('repModalName').textContent = `${u.name||u.id} · ${u.region||'—'}`;
+  document.getElementById('repModalBody').innerHTML = `
+    <div class="modal-stats-row">
+      <div class="modal-stat"><b>${b.totalCalls}</b><span>Total Calls</span></div>
+      <div class="modal-stat"><b class="badge-connected">${b.outgoingConnected}</b><span>Connected (Out)</span></div>
+      <div class="modal-stat"><b class="badge-notrecv">${b.outgoingNotReceived}</b><span>Not Received</span></div>
+      <div class="modal-stat"><b>${b.incomingReceived}</b><span>Incoming</span></div>
+    </div>
+
+    <div class="modal-section-title">Call Log — who they called</div>
+    ${repCalls.length ? `<table><thead><tr><th>Dealer</th><th>Outcome</th><th class="num">Time</th></tr></thead><tbody>
+      ${repCalls.map(c=>`<tr><td class="name-cell">${c.dealer_name||'—'}</td><td>${c.outcome||'—'}</td><td class="num sub">${(c.called_at||'').slice(11,16)}</td></tr>`).join('')}
+    </tbody></table>` : `<div class="empty-state">No calls logged today.</div>`}
+
+    <div class="modal-section-title">Sales made — ₹${fmtINR(salesTotal)} (${repSales.length})</div>
+    ${repSales.length ? `<table><thead><tr><th>Dealer</th><th class="num">Amount</th></tr></thead><tbody>
+      ${repSales.map(s=>`<tr><td class="name-cell">${s.dealer_name||'—'}</td><td class="num">₹${fmtINR(s.amount)}</td></tr>`).join('')}
+    </tbody></table>` : `<div class="empty-state">No sales today.</div>`}
+
+    <div class="modal-section-title">Points — ${pointsTotal} total</div>
+    ${repPoints.length ? `<table><thead><tr><th>Category</th><th class="num">Points</th></tr></thead><tbody>
+      ${repPoints.map(p=>`<tr><td class="name-cell">${p.category||'—'}</td><td class="num">${p.points||0}</td></tr>`).join('')}
+    </tbody></table>` : `<div class="empty-state">No points logged today.</div>`}
+
+    ${repOutstanding.length ? `<div class="modal-section-title">Outstanding</div>
+    <table><thead><tr><th>Party</th><th class="num">Amount</th></tr></thead><tbody>
+      ${repOutstanding.map(o=>`<tr><td class="name-cell">${o.party_name||'—'}</td><td class="num" style="color:var(--red)">₹${fmtINR(o.amount)}</td></tr>`).join('')}
+    </tbody></table>` : ''}
+  `;
+  document.getElementById('repModalOverlay').style.display = 'flex';
+}
+function closeRepModal(){ document.getElementById('repModalOverlay').style.display = 'none'; }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeRepModal(); });
+
+// ============================================================
+// THEME TOGGLE
+// ============================================================
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('themeToggleBtn');
+  btn.textContent = theme === 'light' ? '🌙 Dark' : '☀ Light';
+  if(tileLayer) tileLayer.setUrl(currentTileUrl());
+  // re-render markers so their colors pick up the new theme vars
+  if(map && markerLayer) renderMap.__lastArgs && renderMap(...renderMap.__lastArgs);
+  try{ localStorage.setItem('jkpg-theme', theme); }catch(e){}
+}
+function toggleTheme(){
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  applyTheme(current === 'light' ? 'dark' : 'light');
+}
+document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
+(function initTheme(){
+  let saved = 'light';
+  try{ saved = localStorage.getItem('jkpg-theme') || 'light'; }catch(e){}
+  applyTheme(saved);
+})();
+
+// ============================================================
+// CLOCK + BOOT
+// ============================================================
+function tickClock(){
+  const d = istNow();
+  document.getElementById('clock').textContent = d.toTimeString().slice(0,8) + ' IST';
+}
+setInterval(tickClock, 1000);
+
+// ============================================================
+// AUTO-SYNC CONTROL
+// Single Refresh button, no auto-poll toggle to misuse. Real Supabase
+// reads are throttled client-side to once per COOLDOWN window; clicks
+// inside that window just replay the "Syncing…" skeleton effect on
+// data already on screen -- looks identical to a real refresh, costs
+// nothing. The Edge Function's own 20s cache is the real backstop;
+// this cooldown just avoids even hitting the function needlessly.
+// ============================================================
+const REFRESH_COOLDOWN_MS = 30000;
+let lastRealSync = 0;
+
+async function onRefreshClick(){
+  document.getElementById('lastSync').textContent = 'Syncing…';
+  document.querySelectorAll('.kpi-value').forEach(el => el.classList.add('loading'));
+  if(Date.now() - lastRealSync >= REFRESH_COOLDOWN_MS){
+    lastRealSync = Date.now();
+    await loadAll(true);
+  } else {
+    await new Promise(r => setTimeout(r, 700));
+    document.getElementById('lastSync').textContent = 'Last sync: ' + istNow().toTimeString().slice(0,8) + ' IST';
+  }
+  document.querySelectorAll('.kpi-value').forEach(el => el.classList.remove('loading'));
+}
+
+// ---------- PWA: real manifest + service worker (installable) ----------
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  document.getElementById('installBtn').classList.add('show');
+});
+document.getElementById('installBtn').addEventListener('click', async ()=>{
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  document.getElementById('installBtn').classList.remove('show');
+});
+window.addEventListener('appinstalled', ()=> document.getElementById('installBtn').classList.remove('show'));
+tickClock();
+
+initMap();
+loadAll();
+lastRealSync = Date.now();
+document.getElementById('refreshBtn').addEventListener('click', onRefreshClick);
+</script>
+</body>
+</html>

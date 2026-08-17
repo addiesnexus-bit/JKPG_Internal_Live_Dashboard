@@ -343,6 +343,7 @@
   <section class="panel" style="margin-bottom:16px;">
     <div class="panel-head">
       <div class="panel-title">Daily Calling Report <span class="tag">Unique contacts today — dealer or raw number, deduped, one outcome per contact</span></div>
+      <button id="genReportBtn" class="tag" style="cursor:pointer;border:1px solid var(--border)" onclick="generateReport()">📝 Generate Report</button>
     </div>
     <div class="panel-body">
       <table>
@@ -434,6 +435,22 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="reportModalOverlay" style="display:none" onclick="if(event.target===this)closeReportModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="panel-title">Field Report — Text (WhatsApp-ready)</div>
+      <button class="modal-close" onclick="closeReportModal()">✕ Close</button>
+    </div>
+    <div class="modal-body">
+      <pre class="mono" id="reportText" style="white-space:pre-wrap;font-size:13px;line-height:1.5;padding:14px;background:var(--bg);border-radius:8px;border:1px solid var(--line);"></pre>
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <button class="refresh-btn" onclick="shareReportText()">📤 Share to WhatsApp</button>
+        <button class="refresh-btn" onclick="copyReportText()">📋 Copy Text</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <footer>JK Powerguard — Internal Operations Dashboard · Local file, hand-distributed only</footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -509,6 +526,79 @@ function fmtINR(n){
   return new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(Math.round(n||0));
 }
 
+// ---------- WhatsApp text report (reuses in-memory data — zero new fetch) ----------
+const REPORT_LOCK_MS = 2 * 60 * 60 * 1000;
+function reportLockRemainingMs(){
+  const last = parseInt(localStorage.getItem('lastReportGenAt') || '0', 10);
+  return Math.max(0, REPORT_LOCK_MS - (Date.now() - last));
+}
+function updateReportBtnState(){
+  const btn = document.getElementById('genReportBtn');
+  if(!btn) return;
+  const remaining = reportLockRemainingMs();
+  if(remaining <= 0){
+    btn.disabled = false;
+    btn.textContent = '📝 Generate Report';
+  }else{
+    btn.disabled = true;
+    const mins = Math.floor(remaining / 60000);
+    const secs = Math.floor((remaining % 60000) / 1000);
+    btn.textContent = `🔒 Next report in ${mins}m ${String(secs).padStart(2,'0')}s`;
+  }
+}
+function buildReportText(){
+  const { users, callLogs, sales } = repDataStore;
+  const now = istNow();
+  const dateStr = todayDDMMYYYY(now);
+  let txt = `*JKPG Field Report*\n_${dateStr} · ${now.toTimeString().slice(0,5)} IST_\n\n`;
+
+  txt += `*📞 Calling Report (Today)*\n`;
+  users.forEach(u => {
+    const b = computeCallBuckets(callLogs.filter(c => c.user_id === u.id));
+    txt += `${u.name || u.id}: ${b.totalCalls} total, ${b.outgoingConnected} connected, ${b.outgoingNotReceived} not received\n`;
+  });
+
+  const ddmmyyyyToday = dateStr;
+  const latestByUser = {};
+  dutyAttendanceCache.filter(a => a.date === ddmmyyyyToday).forEach(a => {
+    const lat = a.punch_out_lat ?? a.punch_in_lat;
+    const lng = a.punch_out_lng ?? a.punch_in_lng;
+    if(lat != null && lng != null) latestByUser[a.user_id] = { lat, lng, time: a.punch_out_time || a.punch_in_time };
+  });
+  txt += `\n*📍 Last Known Locations*\n`;
+  const seen = Object.keys(latestByUser);
+  if(seen.length === 0){
+    txt += `No location pings recorded today.\n`;
+  }else{
+    users.forEach(u => {
+      const g = latestByUser[u.id];
+      if(g) txt += `${u.name || u.id}: ${g.lat.toFixed(5)}, ${g.lng.toFixed(5)} (${g.time || '—'})\n`;
+    });
+  }
+
+  const salesTotal = (sales || []).reduce((s, x) => s + (x.amount || 0), 0);
+  txt += `\n*💰 Sales Today:* ₹${fmtINR(salesTotal)}`;
+  return txt;
+}
+function generateReport(){
+  if(reportLockRemainingMs() > 0) return;
+  document.getElementById('reportText').textContent = buildReportText();
+  document.getElementById('reportModalOverlay').style.display = 'flex';
+  localStorage.setItem('lastReportGenAt', String(Date.now()));
+  updateReportBtnState();
+}
+function closeReportModal(){ document.getElementById('reportModalOverlay').style.display = 'none'; }
+function copyReportText(){
+  navigator.clipboard.writeText(document.getElementById('reportText').textContent)
+    .then(() => alert('Report copied to clipboard.'));
+}
+function shareReportText(){
+  const text = document.getElementById('reportText').textContent;
+  if(navigator.share){ navigator.share({ text }).catch(() => {}); }
+  else copyReportText();
+}
+setInterval(updateReportBtnState, 1000);
+
 // ---------- call bucket algorithm (mirrors Android computeCallBuckets) ----------
 function computeCallBuckets(logs){
   const groups = {};
@@ -564,6 +654,39 @@ function repMarkerIcon(active){
 // ============================================================
 let outstandingCache = [];
 let syncTickCount = 0;
+function renderAll(d){
+  repDataStore = { users: d.users, callLogs: d.callLogs, sales: d.sales, points: d.points, outstanding: d.outstanding };
+  dutyAttendanceCache = d.dutyAttendanceCache;
+  dutyUsersCache = d.users;
+  outstandingCache = d.outstanding;
+  document.getElementById('attDate').textContent = d.ddmmyyyyToday;
+  document.getElementById('salesDate').textContent = d.ddmmyyyyToday;
+  renderKPIs(d.users, d.callLogs, d.sales, d.outstanding, d.hotLeads);
+  renderMap(d.users, d.geo, d.attendanceToday);
+  renderAttendance(d.users, d.attendanceToday);
+  renderDutyHours(d.users, d.dutyAttendanceCache, dutyRange);
+  renderTamperAlerts(d.tamperAlerts);
+  renderCallingReport(d.users, d.callLogs);
+  renderProductivity(d.users, d.callLogs, d.points);
+  renderRepCards(d.users, d.callLogs, d.sales, d.points);
+  renderSales(d.sales);
+  renderOutstanding(d.outstanding);
+  renderLeads(d.hotLeads);
+}
+const FULL_CACHE_KEY = 'jkpg-full-cache';
+function saveFullCache(d){ try{ localStorage.setItem(FULL_CACHE_KEY, JSON.stringify({ d, ts: Date.now() })); }catch(e){} }
+function restoreFromCache(){
+  try{
+    const c = JSON.parse(localStorage.getItem(FULL_CACHE_KEY));
+    if(c && Date.now() - c.ts < REFRESH_COOLDOWN_MS){
+      renderAll(c.d);
+      lastRealSync = c.ts;
+      document.getElementById('lastSync').textContent = 'Last sync: ' + new Date(c.ts).toTimeString().slice(0,8) + ' IST (cached)';
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
 async function loadAll(isManual = true){
   if (!isManual) syncTickCount++;
   document.getElementById('lastSync').textContent = 'Syncing…';
@@ -571,13 +694,11 @@ async function loadAll(isManual = true){
     const now = istNow();
     const isoToday = todayISO(now);
     const ddmmyyyyToday = todayDDMMYYYY(now);
-    document.getElementById('attDate').textContent = ddmmyyyyToday;
-    document.getElementById('salesDate').textContent = ddmmyyyyToday;
 
     // Egress guard: the full attendance table only needs to be pulled ONCE
-    // per session — past days never change. Every 60s auto-refresh after
+    // per session — past days never change. The hourly auto-refresh after
     // that only re-pulls TODAY's rows (a handful) and merges them into the
-    // cached history. Re-fetching the whole growing table every 60s was
+    // cached history. Re-fetching the whole growing table every cycle was
     // exactly the pattern that blew past the egress cap on the last project.
     const needFullHistory = dutyAttendanceCache.length === 0;
     const [users, geo, attendanceToday, callLogs, points, sales, outstanding, hotLeads, tamperAlerts, attendanceFull] = await Promise.all([
@@ -593,25 +714,10 @@ async function loadAll(isManual = true){
       needFullHistory ? sb(`attendance?select=*&order=id.asc`) : Promise.resolve(null)
     ]);
 
-    const attendance = attendanceToday;
-    repDataStore = { users, callLogs, sales, points, outstanding };
-    dutyAttendanceCache = needFullHistory
-      ? attendanceFull
-      : dutyAttendanceCache.filter(a => a.date !== ddmmyyyyToday).concat(attendanceToday);
-    dutyUsersCache = users;
-
-    renderKPIs(users, callLogs, sales, outstanding, hotLeads);
-    renderMap(users, geo, attendance);
-    renderAttendance(users, attendance);
-    renderDutyHours(users, dutyAttendanceCache, dutyRange);
-    renderTamperAlerts(tamperAlerts);
-    renderCallingReport(users, callLogs);
-    renderProductivity(users, callLogs, points);
-    renderRepCards(users, callLogs, sales, points);
-    renderSales(sales);
-    outstandingCache = outstanding;
-    renderOutstanding(outstanding);
-    renderLeads(hotLeads);
+    const mergedHistory = needFullHistory ? attendanceFull : dutyAttendanceCache.filter(a => a.date !== ddmmyyyyToday).concat(attendanceToday);
+    const d = { users, geo, attendanceToday, callLogs, points, sales, outstanding, hotLeads, tamperAlerts, dutyAttendanceCache: mergedHistory, ddmmyyyyToday };
+    renderAll(d);
+    saveFullCache(d);
 
     document.getElementById('lastSync').textContent = 'Last sync: ' + now.toTimeString().slice(0,8) + ' IST';
   }catch(err){
@@ -996,14 +1102,15 @@ setInterval(tickClock, 1000);
 // nothing. The Edge Function's own 20s cache is the real backstop;
 // this cooldown just avoids even hitting the function needlessly.
 // ============================================================
-const REFRESH_COOLDOWN_MS = 30000;
-let lastRealSync = 0;
+const REFRESH_COOLDOWN_MS = 60 * 60 * 1000;
+let lastRealSync = parseInt(localStorage.getItem('jkpg-last-real-sync') || '0', 10);
 
 async function onRefreshClick(){
   document.getElementById('lastSync').textContent = 'Syncing…';
   document.querySelectorAll('.kpi-value').forEach(el => el.classList.add('loading'));
   if(Date.now() - lastRealSync >= REFRESH_COOLDOWN_MS){
     lastRealSync = Date.now();
+    localStorage.setItem('jkpg-last-real-sync', String(lastRealSync));
     await loadAll(true);
   } else {
     await new Promise(r => setTimeout(r, 700));
@@ -1033,9 +1140,14 @@ window.addEventListener('appinstalled', ()=> document.getElementById('installBtn
 tickClock();
 
 initMap();
-loadAll();
-lastRealSync = Date.now();
+updateReportBtnState();
+if(!restoreFromCache()){
+  lastRealSync = Date.now();
+  localStorage.setItem('jkpg-last-real-sync', String(lastRealSync));
+  loadAll(true);
+}
 document.getElementById('refreshBtn').addEventListener('click', onRefreshClick);
+setInterval(() => { lastRealSync = Date.now(); localStorage.setItem('jkpg-last-real-sync', String(lastRealSync)); loadAll(true); }, REFRESH_COOLDOWN_MS);
 </script>
 </body>
 </html>
